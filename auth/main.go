@@ -1,58 +1,57 @@
-package auth
+package main
 
-import (
-	"fmt"
-	"github.com/dgrijalva/jwt-go"
-	"net/http"
-)
+import ()
 
 func main() {
-	mux := http.NewServeMux()
-	s := &http.Server{
-		Addr:    "3002",
-		Handler: mux,
-	}
+	auth := &authService{}
 
-	mux.Handle("/validate", middleware(http.HandlerFunc(ValidateJTW)))
+	// logging middleware
+	service := NewLogger(auth)
 
-	err := s.ListenAndServe()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	server := NewJSONServer(service, ":3002")
+	server.Run()
 }
 
-func middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := next.ServeHTTP(w, r); err != nil {
-			// will this work to centralise error handling?
-		}
-	})
-
-}
-
-func ValidateJTW(w http.ResponseWriter, r *http.Request) error {
-	tokenString := r.Header.Get("Authorization")
-
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// validate the token signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing methds: %v", token.Header["alg"])
-		}
-		return []byte("secret"), nil
-	})
-
-	// WRITE RESPONSE HEADERS ETC
-	// HANDERS DONT RETURN ANYTHING, JUST WRITE HEADERS
-
-	if err != nil {
-		return err, http.StatusUnauthorized
-	}
-
-	if !token.Valid {
-		return nil, http.StatusUnauthorized
-	}
-
-	return
-
-}
+// func middleware(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		next.ServeHTTP(w, r)
+// 	})
+// }
+//
+// func ValidateJTW(w http.ResponseWriter, r *http.Request) {
+// 	authHeader := r.Header.Get("Authorization")
+// 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+// 	fmt.Println(tokenString)
+// 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+// 		// validate the token signing method
+// 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+// 			fmt.Println("not ok parsing token")
+// 			return nil, fmt.Errorf("Unexpected signing methds: %v", token.Header["alg"])
+// 		}
+// 		// my auth secret key, same as front end, put in env file
+// 		return []byte("secret"), nil
+// 	})
+//
+// 	fmt.Println("jwt ", token)
+//
+// 	// WRITE RESPONSE HEADERS ETC
+// 	// HANDERS DONT RETURN ANYTHING, JUST WRITE HEADERS
+//
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+// 	}
+//
+// 	if !token.Valid {
+// 		fmt.Println("token not valid")
+// 		writeJSON(w, http.StatusUnauthorized, map[string]any{"": ""})
+// 	}
+//
+// 	writeJSON(w, http.StatusOK, map[string]string{"message": "valid token"})
+// 	return
+// }
+//
+// func writeJSON(w http.ResponseWriter, statusCode int, value any) error {
+// 	w.WriteHeader(statusCode)
+// 	return json.NewEncoder(w).Encode(value)
+// }
