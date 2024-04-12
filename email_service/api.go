@@ -62,11 +62,10 @@ func makeHTTPHandlerFunc(apiFunc APIFunc) http.HandlerFunc {
 
 func (s *JSONAPIServer) handleSendPasswordResetEmail(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	// check for jwt
-	jwt, err := validateJWT(w, r)
-	if err != nil {
-		return err
-	}
-	fmt.Println("jwt:", jwt)
+	// jwt, err := validateJWT(w, r)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// read the request body
 	body, err := ioutil.ReadAll(r.Body)
