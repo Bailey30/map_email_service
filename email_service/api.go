@@ -12,7 +12,8 @@ import (
 )
 
 type ResetEmailBody struct {
-	Email string `json:"email"`
+	UserId int    `json:"userId"`
+	Email  string `json:"email"`
 }
 
 type ResetEmailResponse struct {
@@ -23,13 +24,15 @@ type APIFunc func(context.Context, http.ResponseWriter, *http.Request) error
 
 type JSONAPIServer struct {
 	listenAddr string
-	svc        EmailService
+	svc        PasswordService
+	db         PasswordResetDB
 }
 
-func NewJSONAPIServer(listenAddr string, svc EmailService) *JSONAPIServer {
+func NewJSONAPIServer(listenAddr string, svc PasswordService, db PasswordResetDB) *JSONAPIServer {
 	return &JSONAPIServer{
 		listenAddr: listenAddr,
 		svc:        svc,
+		db:         db,
 	}
 }
 
@@ -61,11 +64,13 @@ func makeHTTPHandlerFunc(apiFunc APIFunc) http.HandlerFunc {
 }
 
 func (s *JSONAPIServer) handleSendPasswordResetEmail(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	// check for jwt
-	// jwt, err := validateJWT(w, r)
-	// if err != nil {
-	// 	return err
-	// }
+	// check for jwt in the gateway before this service is called
+
+	// check if user email exists in the database - in the nextjs server
+
+	// create new token and store hashed (SHA256) version in database
+	// create link that is sent to user with the token
+	// when the user sends their new password, the token is sent to this service to be validated, then the password is changed in the other database
 
 	// read the request body
 	body, err := ioutil.ReadAll(r.Body)
@@ -82,8 +87,23 @@ func (s *JSONAPIServer) handleSendPasswordResetEmail(ctx context.Context, w http
 		return err
 	}
 
+	// create token
+	token, err := GenerateRandomToken()
+	if err != nil {
+		return err
+	}
+
+	// created hashed version of the token for the database
+	hashedToken := HashToken(token)
+
+	// add hashed token to database
+	createErr := s.db.create(CreateResetCodeParams{reqBody.UserId, hashedToken})
+	if createErr != nil {
+		return createErr
+	}
+
 	// business logic
-	email, err := s.svc.SendResetPasswordEmail(ctx, reqBody.Email)
+	email, err := s.svc.SendResetPasswordEmail(ctx, reqBody.Email, token)
 	if err != nil {
 		fmt.Println(err)
 		return err

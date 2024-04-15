@@ -2,28 +2,25 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/smtp"
 	"os"
-
-	"github.com/joho/godotenv"
 )
 
-type EmailService interface {
-	SendResetPasswordEmail(context.Context, string) (string, error)
+type PasswordService interface {
+	SendResetPasswordEmail(context.Context, string, string) (string, error)
 }
 
-type emailService struct{}
+type passwordService struct{}
 
-func NewEmailService() *emailService {
-	return &emailService{}
+func NewPasswordService() *passwordService {
+	return &passwordService{}
 }
 
-func (s *emailService) SendResetPasswordEmail(ctx context.Context, email string) (string, error) {
-	envErr := godotenv.Load()
-	if envErr != nil {
-		return "", envErr
-	}
+func (s *passwordService) SendResetPasswordEmail(ctx context.Context, email string, token string) (string, error) {
 	// auth credentials
 	password := os.Getenv("APP_PASSWORD")
 	senderEmail := "guinnessmapservices@gmail.com"
@@ -54,4 +51,33 @@ func (s *emailService) SendResetPasswordEmail(ctx context.Context, email string)
 	fmt.Println("email sent to", email)
 
 	return email, nil
+}
+
+func GenerateRandomToken() (string, error) {
+	// Generate a byte slice of length 16 to hold random bytes
+	tokenBytes := make([]byte, 16)
+
+	// Fill the tokenBytes slice with random bytes
+	_, err := rand.Read(tokenBytes)
+	if err != nil {
+		return "", err
+	}
+
+	// Encode the random bytes to hexadecimal string representation
+	return hex.EncodeToString(tokenBytes), nil
+}
+
+// Function to hash the token using SHA256
+func HashToken(token string) string {
+	// Create a new SHA256 hasher
+	hasher := sha256.New()
+
+	// Write the token bytes to the hasher
+	hasher.Write([]byte(token))
+
+	// Calculate the SHA256 hash of the token
+	hashedToken := hasher.Sum(nil)
+
+	// Encode the hashed token to hexadecimal string representation
+	return hex.EncodeToString(hashedToken)
 }
