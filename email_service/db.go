@@ -91,7 +91,7 @@ func (db *PasswordResetDB) getOneById() (ResetCode, error) {
 		`SELECT
             UserId, HashedCode
         FROM resetcode 
-        WHERE UserId = ?`,
+        WHERE UserId = $1`,
 		1); err != nil {
 		if err != sql.ErrNoRows {
 			return ResetCode{}, err
@@ -100,6 +100,41 @@ func (db *PasswordResetDB) getOneById() (ResetCode, error) {
 	}
 
 	return reset_code, err
+}
+
+// gets all the reset codes associated with the user id
+func (db *PasswordResetDB) getAllById(id int) ([]ResetCode, error) {
+	err := db.connect()
+	if err != nil {
+		return []ResetCode{}, err
+	}
+	defer db.close()
+
+	var resetCodes []ResetCode
+	if err := db.dbx.Select(
+		&resetCodes,
+		`SELECT * FROM resetcode WHERE user_id = $1`,
+		id); err != nil {
+		return nil, err
+	}
+
+	return resetCodes, nil
+}
+
+// deletes all reset codes associated with the user id
+func (db *PasswordResetDB) deleteAllById(id int) error {
+	err := db.connect()
+	if err != nil {
+		return err
+	}
+	defer db.close()
+
+	if _, err := db.dbx.Exec(
+		`DELETE FROM resetcode WHERE user_id = $1`, id); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (db *PasswordResetDB) CreateTable() error {

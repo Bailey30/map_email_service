@@ -5,13 +5,16 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/smtp"
 	"os"
+	"time"
 )
 
 type PasswordService interface {
 	SendResetPasswordEmail(context.Context, string, string) (string, error)
+	ValidateResetCode(context.Context, ValidateTokenBody, PasswordResetDB) error
 }
 
 type passwordService struct{}
@@ -30,7 +33,7 @@ func (s *passwordService) SendResetPasswordEmail(ctx context.Context, email stri
 
 	// message contents
 	subject := "Reset password"
-	mailBody := "Here will be the password reset link"
+	mailBody := token
 
 	recipient := []string{email}
 
@@ -51,6 +54,45 @@ func (s *passwordService) SendResetPasswordEmail(ctx context.Context, email stri
 	fmt.Println("email sent to", email)
 
 	return email, nil
+}
+
+func (s *passwordService) ValidateResetCode(ctx context.Context, reqBody ValidateTokenBody, db PasswordResetDB) error {
+	// get the any tokens from the database using the user id
+	resetTokens, err := db.getAllById(reqBody.UserId)
+	if err != nil {
+		return err
+	}
+
+	// hash the token from the request to compare with what is in the database
+	hashedToken := HashToken(reqBody.Token)
+
+	// loop over the tokens in the database to find a match
+	var matchedToken ResetCode
+	for _, tokenInDb := range resetTokens {
+		if tokenInDb.HashedCode == hashedToken {
+			matchedToken = tokenInDb
+		}
+	}
+
+	// if not token has been matched return error
+	if matchedToken == (ResetCode{}) {
+		fmt.Println("Invalid password reset token")
+		return errors.New("Invalid password reset token")
+	}
+
+	// check if the token has not expired
+	if matchedToken.Expiry.Before(time.Now()) {
+		fmt.Println("Token has expired")
+		return errors.New("Token has expired")
+	}
+
+	// delete anything in the database related to user
+	deleteErr := db.deleteAllById(reqBody.UserId)
+	if deleteErr != nil {
+		return err
+	}
+
+	return nil
 }
 
 func GenerateRandomToken() (string, error) {

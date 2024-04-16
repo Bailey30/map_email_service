@@ -16,8 +16,17 @@ type ResetEmailBody struct {
 	Email  string `json:"email"`
 }
 
+type ValidateTokenBody struct {
+	UserId int    `json:"userId"`
+	Token  string `json:"token"`
+}
+
 type ResetEmailResponse struct {
 	Email string `json:"email"`
+}
+
+type ValidateTokenResponse struct {
+	Success bool `json:"success"`
 }
 
 type APIFunc func(context.Context, http.ResponseWriter, *http.Request) error
@@ -37,7 +46,8 @@ func NewJSONAPIServer(listenAddr string, svc PasswordService, db PasswordResetDB
 }
 
 func (s *JSONAPIServer) Run() {
-	http.HandleFunc("/", makeHTTPHandlerFunc(s.handleSendPasswordResetEmail))
+	http.HandleFunc("/sendemail", makeHTTPHandlerFunc(s.handleSendPasswordResetEmail))
+	http.HandleFunc("/validatetoken", makeHTTPHandlerFunc(s.handleValidateToken))
 
 	fmt.Printf("listening on port %s", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, nil)
@@ -57,7 +67,8 @@ func makeHTTPHandlerFunc(apiFunc APIFunc) http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization") // Allow specified headers
 
 		if err := apiFunc(ctx, w, r); err != nil {
-			// centralised error handling
+			fmt.Println("api err", err)
+			// centralised error handling - not sure i like this. Cant specify status code easily
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		}
 	}
@@ -116,6 +127,37 @@ func (s *JSONAPIServer) handleSendPasswordResetEmail(ctx context.Context, w http
 
 	// encode and return json
 	return writeJSON(w, http.StatusOK, &resetEmailResponse)
+}
+
+func (s *JSONAPIServer) handleValidateToken(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	// read the request body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	// parse the json
+	reqBody := new(ValidateTokenBody)
+	err = json.Unmarshal(body, &reqBody)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	validateErr := s.svc.ValidateResetCode(ctx, *reqBody, s.db)
+	if validateErr != nil {
+		return validateErr
+	}
+
+	// return that the token is valid
+	// create the reponse value
+	validateTokenResponse := ValidateTokenResponse{
+		Success: true,
+	}
+
+	// encode and return json
+	return writeJSON(w, http.StatusOK, &validateTokenResponse)
 }
 
 func writeJSON(w http.ResponseWriter, s int, v any) error {
