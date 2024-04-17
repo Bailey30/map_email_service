@@ -33,7 +33,7 @@ func (s *passwordService) SendResetPasswordEmail(ctx context.Context, email stri
 
 	// message contents
 	subject := "Reset password"
-	mailBody := token
+	mailBody := os.Getenv("GUINNESS_MAP_URL") + "/resetpassword/" + token
 
 	recipient := []string{email}
 
@@ -57,7 +57,7 @@ func (s *passwordService) SendResetPasswordEmail(ctx context.Context, email stri
 }
 
 func (s *passwordService) ValidateResetCode(ctx context.Context, reqBody ValidateTokenBody, db PasswordResetDB) error {
-	// get the any tokens from the database using the user id
+	// get any tokens from the database using the user id
 	resetTokens, err := db.getAllById(reqBody.UserId)
 	if err != nil {
 		return err
