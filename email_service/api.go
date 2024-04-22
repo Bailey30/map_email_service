@@ -17,8 +17,7 @@ type ResetEmailBody struct {
 }
 
 type ValidateTokenBody struct {
-	UserId int    `json:"userId"`
-	Token  string `json:"token"`
+	Token string `json:"token"`
 }
 
 type ResetEmailResponse struct {
@@ -27,6 +26,7 @@ type ResetEmailResponse struct {
 
 type ValidateTokenResponse struct {
 	Success bool `json:"success"`
+	UserId  int  `json:"userId`
 }
 
 type APIFunc func(context.Context, http.ResponseWriter, *http.Request) error
@@ -145,7 +145,7 @@ func (s *JSONAPIServer) handleValidateToken(ctx context.Context, w http.Response
 		return err
 	}
 
-	validateErr := s.svc.ValidateResetCode(ctx, *reqBody, s.db)
+	resetToken, validateErr := s.svc.ValidateResetCode(ctx, *reqBody, s.db)
 	if validateErr != nil {
 		return validateErr
 	}
@@ -154,6 +154,7 @@ func (s *JSONAPIServer) handleValidateToken(ctx context.Context, w http.Response
 	// create the reponse value
 	validateTokenResponse := ValidateTokenResponse{
 		Success: true,
+		UserId:  resetToken.UserId,
 	}
 
 	// encode and return json

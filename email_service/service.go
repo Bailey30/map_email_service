@@ -14,7 +14,7 @@ import (
 
 type PasswordService interface {
 	SendResetPasswordEmail(context.Context, string, string) (string, error)
-	ValidateResetCode(context.Context, ValidateTokenBody, PasswordResetDB) error
+	ValidateResetCode(context.Context, ValidateTokenBody, PasswordResetDB) (ResetCode, error)
 }
 
 type passwordService struct{}
@@ -56,15 +56,21 @@ func (s *passwordService) SendResetPasswordEmail(ctx context.Context, email stri
 	return email, nil
 }
 
-func (s *passwordService) ValidateResetCode(ctx context.Context, reqBody ValidateTokenBody, db PasswordResetDB) error {
-	// get any tokens from the database using the user id
-	resetTokens, err := db.getAllById(reqBody.UserId)
-	if err != nil {
-		return err
-	}
-
+func (s *passwordService) ValidateResetCode(ctx context.Context, reqBody ValidateTokenBody, db PasswordResetDB) (ResetCode, error) {
 	// hash the token from the request to compare with what is in the database
 	hashedToken := HashToken(reqBody.Token)
+
+	// get token and user id from db using hashed token from token in reqBody - cannot send user id in request as they wont be logged in
+	resetToken, err := db.getByToken(hashedToken)
+	if err != nil {
+		return ResetCode{}, err
+	}
+
+	// get any tokens from the database using the user id
+	resetTokens, err := db.getAllById(resetToken.UserId)
+	if err != nil {
+		return ResetCode{}, err
+	}
 
 	// loop over the tokens in the database to find a match
 	var matchedToken ResetCode
@@ -74,25 +80,25 @@ func (s *passwordService) ValidateResetCode(ctx context.Context, reqBody Validat
 		}
 	}
 
-	// if not token has been matched return error
+	// if not token has been matched return error - may have already been redeemed
 	if matchedToken == (ResetCode{}) {
 		fmt.Println("Invalid password reset token")
-		return errors.New("Invalid password reset token")
+		return ResetCode{}, errors.New("Invalid password reset token")
 	}
 
 	// check if the token has not expired
 	if matchedToken.Expiry.Before(time.Now()) {
 		fmt.Println("Token has expired")
-		return errors.New("Token has expired")
+		return ResetCode{}, errors.New("Token has expired")
 	}
 
 	// delete anything in the database related to user
-	deleteErr := db.deleteAllById(reqBody.UserId)
+	deleteErr := db.deleteAllById(resetToken.UserId)
 	if deleteErr != nil {
-		return err
+		return ResetCode{}, err
 	}
 
-	return nil
+	return resetToken, nil
 }
 
 func GenerateRandomToken() (string, error) {

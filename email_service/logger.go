@@ -28,13 +28,13 @@ func (s *logger) SendResetPasswordEmail(ctx context.Context, email string, token
 				"took":  time.Since(begin),
 				"error": err,
 				"email": email,
-			}).Info("auth service - validate")
+			}).Info("reset password service - send password reset email")
 	}(time.Now())
 
 	return s.next.SendResetPasswordEmail(ctx, email, token)
 }
 
-func (s *logger) ValidateResetCode(ctx context.Context, reqBody ValidateTokenBody, db PasswordResetDB) (err error) {
+func (s *logger) ValidateResetCode(ctx context.Context, reqBody ValidateTokenBody, db PasswordResetDB) (token ResetCode, err error) {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		ForceColors:  true,
 		PadLevelText: true,
@@ -45,7 +45,7 @@ func (s *logger) ValidateResetCode(ctx context.Context, reqBody ValidateTokenBod
 				"took":        time.Since(begin),
 				"error":       err,
 				"requestBody": reqBody,
-			}).Info("auth service - validate")
+			}).Info("reset password service - validate reset code")
 	}(time.Now())
 	return s.next.ValidateResetCode(ctx, reqBody, db)
 }

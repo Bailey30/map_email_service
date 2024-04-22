@@ -137,6 +137,21 @@ func (db *PasswordResetDB) deleteAllById(id int) error {
 	return nil
 }
 
+func (db *PasswordResetDB) getByToken(token string) (ResetCode, error) {
+	err := db.connect()
+	if err != nil {
+		return ResetCode{}, err
+	}
+	defer db.close()
+
+	var resetCode ResetCode
+	if err = db.dbx.Get(&resetCode, `SELECT * FROM resetcode where hashed_code = $1 LIMIT 1`, token); err != nil {
+		return ResetCode{}, err
+	}
+
+	return resetCode, nil
+}
+
 func (db *PasswordResetDB) CreateTable() error {
 	var schema = `
     CREATE TABLE resetcode (
