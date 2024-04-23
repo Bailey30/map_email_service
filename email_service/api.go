@@ -26,7 +26,11 @@ type ResetEmailResponse struct {
 
 type ValidateTokenResponse struct {
 	Success bool `json:"success"`
-	UserId  int  `json:"userId`
+	UserId  int  `json:"userId"`
+}
+
+type ServiceStatusResponse struct {
+	Code int `json:"code"`
 }
 
 type APIFunc func(context.Context, http.ResponseWriter, *http.Request) error
@@ -46,6 +50,7 @@ func NewJSONAPIServer(listenAddr string, svc PasswordService, db PasswordResetDB
 }
 
 func (s *JSONAPIServer) Run() {
+	http.HandleFunc("/status", makeHTTPHandlerFunc((s.handleStatus)))
 	http.HandleFunc("/sendemail", makeHTTPHandlerFunc(s.handleSendPasswordResetEmail))
 	http.HandleFunc("/validatetoken", makeHTTPHandlerFunc(s.handleValidateToken))
 
@@ -159,6 +164,14 @@ func (s *JSONAPIServer) handleValidateToken(ctx context.Context, w http.Response
 
 	// encode and return json
 	return writeJSON(w, http.StatusOK, &validateTokenResponse)
+}
+
+func (s *JSONAPIServer) handleStatus(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	statusResponse := ServiceStatusResponse{
+		Code: http.StatusOK,
+	}
+
+	return writeJSON(w, http.StatusOK, &statusResponse)
 }
 
 func writeJSON(w http.ResponseWriter, s int, v any) error {
