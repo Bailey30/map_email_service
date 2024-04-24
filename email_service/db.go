@@ -153,16 +153,20 @@ func (db *PasswordResetDB) getByToken(token string) (ResetCode, error) {
 }
 
 func (db *PasswordResetDB) CreateTable() error {
+	err := db.connect()
+	if err != nil {
+		return err
+	}
+	defer db.close()
 	var schema = `
-    CREATE TABLE resetcode (
+    CREATE TABLE IF NOT EXISTS resetcode (
         user_id integer,
         hashed_code text,
         expiry timestamp
     )
     `
 	// execute a query on the server. MustExec panics on error
-	result := db.dbx.MustExec(schema)
-	fmt.Println("exec result", result)
+	db.dbx.MustExec(schema)
 
 	return nil
 }

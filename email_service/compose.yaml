@@ -1,0 +1,19 @@
+services:
+  password-reset-service:
+    build: .
+    ports:
+      - "3001:3001"
+    environment: 
+      DATABASE_URL: "host=postgresdb user=postgres password=postgres dbname=postgres sslmode=disable"
+    depends_on: 
+    - db
+  db:
+    container_name: postgresdb
+    image: postgres
+    restart: always
+    environment:
+     POSTGRES_DB: passwordreset
+     POSTGRES_USER: postgres
+     POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"

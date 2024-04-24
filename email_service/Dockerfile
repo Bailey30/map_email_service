@@ -23,7 +23,8 @@ EXPOSE 3001
 
 CMD ["/password"]
 
-# to build docker build -t password-reset
+# to build
+# docker build -t password-reset
 
 # to run:
 # docker run -d -p 3001:3001 password-reset

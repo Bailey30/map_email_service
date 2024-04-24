@@ -54,7 +54,7 @@ func (s *JSONAPIServer) Run() {
 	http.HandleFunc("/sendemail", makeHTTPHandlerFunc(s.handleSendPasswordResetEmail))
 	http.HandleFunc("/validatetoken", makeHTTPHandlerFunc(s.handleValidateToken))
 
-	fmt.Printf("listening on port %s", s.listenAddr)
+	fmt.Printf("fdgdfgjkdfhgjgdflistening on port %s", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, nil)
 
 }

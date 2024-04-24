@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -18,9 +19,14 @@ func main() {
 	if envErr != nil {
 		log.Fatal(envErr)
 	}
-
+	// postgresql//postgres:postgres@127.0.0.1:5432/passwordreset?sslmode=disable
 	// create new database instance
-	passwordResetDb := NewPasswordResetDB("postgresql://postgres:postgres@localhost:5432/passwordreset?sslmode=disable")
+	passwordResetDb := NewPasswordResetDB(os.Getenv("DATABASE_URL"))
+
+	err := passwordResetDb.CreateTable()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// create new service instance
 	svc := NewPasswordService()
