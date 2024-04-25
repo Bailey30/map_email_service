@@ -35,8 +35,6 @@ func (s *passwordService) SendResetPasswordEmail(ctx context.Context, email stri
 	subject := "Reset password"
 	mailBody := os.Getenv("GUINNESS_MAP_URL") + "/resetpassword/" + token
 
-	fmt.Println("guinness map url", os.Getenv("GUINNESS_MAP_URL"))
-
 	recipient := []string{email}
 
 	// compose message
