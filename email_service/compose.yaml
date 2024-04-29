@@ -6,7 +6,7 @@ services:
     environment: 
       DATABASE_URL: "host=postgresdb user=postgres password=postgres dbname=postgres sslmode=disable"
     depends_on: 
-    - db
+      - db
   db:
     container_name: postgresdb
     image: postgres
@@ -16,4 +16,17 @@ services:
      POSTGRES_USER: postgres
      POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+       - "5432:5432"
+    volumes:
+       -  db:/var/lib/postgresql/data 
+volumes:
+   db:
+
+
+# volumes
+# dedicated directory on your host to store data
+# mounted to filesystem paths
+# data available after container stops
+#
+# designed to support development of stateful docker containers
+# the volume "exists" on the host system but is managed through docker by mounting it to the continainer
