@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/cloudsqlconn"
+	"cloud.google.com/go/cloudsqlconn/postgres/pgxv4"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -32,17 +34,22 @@ func NewPasswordResetDB(databaseUrl string) *PasswordResetDB {
 	}
 }
 
-func (db *PasswordResetDB) connect() error {
-	dbx, err := sqlx.Connect("postgres", db.databaseUrl)
+func (db *PasswordResetDB) connect() (func() error, error) {
+	cleanup, err := pgxv4.RegisterDriver("cloudsql-postgres", cloudsqlconn.WithIAMAuthN())
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("Error on pgxv4.RegisterDriver: %v", err)
+	}
+
+	dbx, err := sqlx.Connect("cloudsql-postgres", db.databaseUrl)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to db: sqlx.Connect: %v", err)
 	}
 
 	db.dbx = dbx
 
 	fmt.Println("Connected to PasswordReset database")
 
-	return nil
+	return cleanup, err
 }
 
 func (db *PasswordResetDB) close() error {
@@ -50,11 +57,12 @@ func (db *PasswordResetDB) close() error {
 }
 
 func (db *PasswordResetDB) create(params CreateResetCodeParams) error {
-	err := db.connect()
+	cleanup, err := db.connect()
 	if err != nil {
 		return err
 	}
 	defer db.close()
+	defer cleanup()
 
 	reset_code := ResetCode{
 		UserId:     params.UserId,
@@ -79,11 +87,12 @@ func (db *PasswordResetDB) create(params CreateResetCodeParams) error {
 }
 
 func (db *PasswordResetDB) getOneById() (ResetCode, error) {
-	err := db.connect()
+	cleanup, err := db.connect()
 	if err != nil {
 		return ResetCode{}, err
 	}
 	defer db.close()
+	defer cleanup()
 
 	var reset_code ResetCode
 	if err := db.dbx.Get(
@@ -104,11 +113,12 @@ func (db *PasswordResetDB) getOneById() (ResetCode, error) {
 
 // gets all the reset codes associated with the user id
 func (db *PasswordResetDB) getAllById(id int) ([]ResetCode, error) {
-	err := db.connect()
+	cleanup, err := db.connect()
 	if err != nil {
 		return []ResetCode{}, err
 	}
 	defer db.close()
+	defer cleanup()
 
 	var resetCodes []ResetCode
 	if err := db.dbx.Select(
@@ -123,11 +133,12 @@ func (db *PasswordResetDB) getAllById(id int) ([]ResetCode, error) {
 
 // deletes all reset codes associated with the user id
 func (db *PasswordResetDB) deleteAllById(id int) error {
-	err := db.connect()
+	cleanup, err := db.connect()
 	if err != nil {
 		return err
 	}
 	defer db.close()
+	defer cleanup()
 
 	if _, err := db.dbx.Exec(
 		`DELETE FROM resetcode WHERE user_id = $1`, id); err != nil {
@@ -138,11 +149,12 @@ func (db *PasswordResetDB) deleteAllById(id int) error {
 }
 
 func (db *PasswordResetDB) getByToken(token string) (ResetCode, error) {
-	err := db.connect()
+	cleanup, err := db.connect()
 	if err != nil {
 		return ResetCode{}, err
 	}
 	defer db.close()
+	defer cleanup()
 
 	var resetCode ResetCode
 	if err = db.dbx.Get(&resetCode, `SELECT * FROM resetcode where hashed_code = $1 LIMIT 1`, token); err != nil {
@@ -153,11 +165,13 @@ func (db *PasswordResetDB) getByToken(token string) (ResetCode, error) {
 }
 
 func (db *PasswordResetDB) CreateTable() error {
-	err := db.connect()
+	cleanup, err := db.connect()
 	if err != nil {
 		return err
 	}
 	defer db.close()
+	defer cleanup()
+
 	var schema = `
     CREATE TABLE IF NOT EXISTS resetcode (
         user_id integer,
