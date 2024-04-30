@@ -34,6 +34,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// main branch
+
 	// create new service instance
 	svc := NewPasswordService()
 
