@@ -1,0 +1,5 @@
+database connection set up:
+https://cloud.google.com/sql/docs/postgres/connect-run#go
+https://github.com/GoogleCloudPlatform/golang-samples/blob/main/cloudsql/postgres/database-sql/connect_connector.go
+
+didnt work, but is where i started: https://codelabs.developers.google.com/codelabs/cloud-sql-go-connector#4

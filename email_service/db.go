@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net"
 	"os"
+	"strings"
 
 	// "errors"
 	"fmt"
@@ -40,7 +42,7 @@ func NewPasswordResetDB(databaseUrl string) *PasswordResetDB {
 	}
 }
 
-func (db *PasswordResetDB) connect() (*sql.DB, error) {
+func (db *PasswordResetDB) connect() error {
 	var (
 		dbUser                 = os.Getenv("DB_USER") // e.g. 'service-account-name@project-id.iam'
 		dbPwd                  = os.Getenv("DB_PASS")
@@ -48,43 +50,43 @@ func (db *PasswordResetDB) connect() (*sql.DB, error) {
 		instanceConnectionName = os.Getenv("INSTANCE_CONNECTION_NAME")
 	)
 
+	// Creating a new Cloud SQL dialer.
 	d, err := cloudsqlconn.NewDialer(context.Background(), cloudsqlconn.WithIAMAuthN())
 	if err != nil {
-		return nil, fmt.Errorf("cloudsqlconn.NewDialer: %w", err)
+		return fmt.Errorf("cloudsqlconn.NewDialer: %w", err)
 	}
 
+	// Creating a Data Source Name (DSN) for PostgreSQL connection.
 	dsn := fmt.Sprintf("user=%s password=%s database=%s", dbUser, dbPwd, dbName)
+
+	// Parsing the DSN into a PostgreSQL configuration.
 	config, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		return nil, err
+		return err
 	}
+
 	var opts []cloudsqlconn.DialOption
+
+	// Customizing the Dial function of the configuration to use the Cloud SQL dialer.
 	config.DialFunc = func(ctx context.Context, network, instance string) (net.Conn, error) {
 		return d.Dial(ctx, instanceConnectionName, opts...)
 	}
+
+	// Registering the connection configuration with the standard library.
 	dbURI := stdlib.RegisterConnConfig(config)
+
+	// Opening a new database connection pool using pgx driver.
 	dbPool, err := sql.Open("pgx", dbURI)
 	if err != nil {
-		return nil, fmt.Errorf("sql.Open: %w", err)
+		return fmt.Errorf("sql.Open: %w", err)
 	}
-	return dbPool, nil
 
-	// cleanup, err := pgxv4.RegisterDriver("cloudsql-postgres", cloudsqlconn.WithIAMAuthN())
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Error on pgxv4.RegisterDriver: %v", err)
-	// }
-	//
-	// dbx, err := sql.Open("cloudsql-postgres", db.databaseUrl)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error connecting to db: sqlx.Connect: %v", err)
-	// }
-	//
-	// fmt.Println("db:", dbx)
-	// db.dbx = dbx
-	//
-	// fmt.Println("Connected to PasswordReset database")
-	//
-	// return cleanup, err
+	// Assigning the connection pool to a struct field.
+	db.dbx = dbPool
+
+	// Returning nil, indicating successful setup of the database connection.
+	return nil
+
 }
 
 func (db *PasswordResetDB) close() error {
@@ -92,92 +94,92 @@ func (db *PasswordResetDB) close() error {
 }
 
 func (db *PasswordResetDB) create(params CreateResetCodeParams) error {
-	cleanup, err := db.connect()
+	err := db.connect()
 	if err != nil {
 		return err
 	}
-	defer cleanup.Close()
-	// cleanup.Close()
-	// defer cleanup()
+	defer db.close()
 
-	// reset_code := ResetCode{
-	// 	UserId:     params.UserId,
-	// 	HashedCode: params.HashedCode,
-	// 	Expiry:     time.Now().Add(time.Hour),
-	// }
+	if _, err := db.dbx.Exec(
+		`INSERT INTO resetcode (user_id, hashed_code, expiry) VALUES ($1, $2, $3)`,
+		params.UserId, params.HashedCode, time.Now().Add(time.Hour),
+	); err != nil {
+		if strings.Contains(err.Error(), "Error 1062") {
+			return fmt.Errorf("Duplicate key error: %v", 1)
+		}
 
-	// if _, err := db.dbx.NamedExec(
-	// 	`INSERT INTO resetcode
-	//                (user_id, hashed_code, expiry)
-	//        VALUES
-	//        (:user_id, :hashed_code, :expiry)`,
-	// 	reset_code); err != nil {
-	// 	if strings.Contains(err.Error(), "Error 1062") {
-	// 		return fmt.Errorf("Duplicate key error: %v", 1)
-	// 	}
-	//
-	// 	return err
-	// }
+		return fmt.Errorf("Error storing resetcode: %v", err)
+	}
 
 	return nil
 }
 
+// UNUSED
 func (db *PasswordResetDB) getOneById() (ResetCode, error) {
-	cleanup, err := db.connect()
+	err := db.connect()
 	if err != nil {
 		return ResetCode{}, err
 	}
-	defer cleanup.Close()
-	// defer db.close()
+	defer db.close()
 	// defer cleanup()
 
-	var reset_code ResetCode
-	// if err := db.dbx.Get(
-	// 	&reset_code,
-	// 	`SELECT
-	//            UserId, HashedCode
-	//        FROM resetcode
-	//        WHERE UserId = $1`,
-	// 	1); err != nil {
-	// 	if err != sql.ErrNoRows {
-	// 		return ResetCode{}, err
-	// 	}
-	// 	return ResetCode{}, errors.New("Record not found")
-	// }
+	var resetCode ResetCode
+	// Prepare the SQL query
+	query := `
+        SELECT
+            UserId, HashedCode
+        FROM resetcode
+        WHERE UserId = $1
+    `
 
-	return reset_code, err
+	// Execute the query
+	row := db.dbx.QueryRow(query, 1)
+	err = row.Scan(&resetCode.UserId, &resetCode.HashedCode)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ResetCode{}, errors.New("Record not found")
+		}
+		return ResetCode{}, err
+	}
+	return resetCode, err
 }
 
 // gets all the reset codes associated with the user id
 func (db *PasswordResetDB) getAllById(id int) ([]ResetCode, error) {
-	cleanup, err := db.connect()
+	err := db.connect()
 	if err != nil {
 		return []ResetCode{}, err
 	}
-	defer cleanup.Close()
-	// defer db.close()
-	// defer cleanup()
+	defer db.close()
 
 	var resetCodes []ResetCode
-	// if err := db.dbx.Select(
-	// 	&resetCodes,
-	// 	`SELECT * FROM resetcode WHERE user_id = $1`,
-	// 	id); err != nil {
-	// 	return nil, err
-	// }
+
+	rows, err := db.dbx.Query("SELECT * FROM resetcode WHERE user_id = $1", id)
+	if err != nil {
+		return nil, fmt.Errorf("Error querying for resetcodes: %v", err)
+	}
+
+	for rows.Next() {
+		var resetCode ResetCode
+		if err := rows.Scan(&resetCode.UserId, &resetCode.HashedCode, &resetCode.Expiry); err != nil {
+			return nil, fmt.Errorf("Error scanning rows when getting all by id: %v", err)
+		}
+		resetCodes = append(resetCodes, resetCode)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("Error scanning rows when getting all by id: %v", err)
+	}
 
 	return resetCodes, nil
 }
 
 // deletes all reset codes associated with the user id
 func (db *PasswordResetDB) deleteAllById(id int) error {
-	cleanup, err := db.connect()
+	err := db.connect()
 	if err != nil {
 		return err
 	}
-	defer cleanup.Close()
-	// defer db.close()
-	// defer cleanup()
+	defer db.close()
 
 	if _, err := db.dbx.Exec(
 		`DELETE FROM resetcode WHERE user_id = $1`, id); err != nil {
@@ -188,31 +190,32 @@ func (db *PasswordResetDB) deleteAllById(id int) error {
 }
 
 func (db *PasswordResetDB) getByToken(token string) (ResetCode, error) {
-	cleanup, err := db.connect()
+	err := db.connect()
 	if err != nil {
 		return ResetCode{}, err
 	}
-	defer cleanup.Close()
-	// defer db.close()
-	// defer cleanup()
+	defer db.close()
 
 	var resetCode ResetCode
-	// if err = db.dbx.Get(&resetCode, `SELECT * FROM resetcode where hashed_code = $1 LIMIT 1`, token); err != nil {
-	// 	return ResetCode{}, err
-	// }
+
+	row := db.dbx.QueryRow("SELECT * FROM resetcode where hashed_code = $1 LIMIT 1", token)
+	if err := row.Scan(&resetCode.UserId, &resetCode.HashedCode, &resetCode.Expiry); err != nil {
+		if err == sql.ErrNoRows {
+			return ResetCode{}, fmt.Errorf("Invalid password reset token")
+		}
+		return ResetCode{}, fmt.Errorf("Error scanning rows")
+	}
 
 	return resetCode, nil
 }
 
 func (db *PasswordResetDB) CreateTable() error {
 	fmt.Println("create table")
-	cleanup, err := db.connect()
+	err := db.connect()
 	if err != nil {
 		return fmt.Errorf("Error connecting to db: %v", err)
 	}
-	defer cleanup.Close()
-	// defer db.close()
-	// defer cleanup()
+	defer db.close()
 
 	var schema = `
 	   CREATE TABLE IF NOT EXISTS resetcode (
@@ -221,8 +224,7 @@ func (db *PasswordResetDB) CreateTable() error {
 	       expiry timestamp
 	   )
 	`
-	// execute a query on the server. MustExec panics on error
-	_, err = cleanup.Exec(schema)
+	_, err = db.dbx.Exec(schema)
 	if err != nil {
 		return fmt.Errorf("Error creating table: %v", err)
 	}
