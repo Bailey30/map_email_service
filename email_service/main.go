@@ -23,11 +23,13 @@ func main() {
 		log.Fatal(envErr)
 	}
 
+	// create database url from env varibles
 	database_url := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=disable", os.Getenv("INSTANCE_CONNECTION_NAME"), os.Getenv("DB_USER"), os.Getenv("DB_NAME"))
+
 	// create new database instance
 	passwordResetDb := NewPasswordResetDB(database_url)
-	// passwordResetDb := NewPasswordResetDB("postgresql://postgres:postgres@127.0.0.1:5432/passwordreset?sslmode=disable")
 
+	// create table in database ready if it doesnt exist
 	err := passwordResetDb.CreateTable()
 	if err != nil {
 		log.Fatal(err)
@@ -39,12 +41,13 @@ func main() {
 	// apply logger middleware
 	serviceWithLogger := NewLogger(svc)
 
-	// create flag and parse any in command line
-	listenAddr := flag.String("listenaddr", ":3001", "listen address the service is running")
+	// get api PORT from env variable
+	listenAddr := ":" + os.Getenv("PORT")
+	fmt.Println("PORT", listenAddr)
 	flag.Parse()
 
 	// create new server with service and database
-	server := NewJSONAPIServer(*listenAddr, serviceWithLogger, *passwordResetDb)
+	server := NewJSONAPIServer(listenAddr, serviceWithLogger, *passwordResetDb)
 	server.Run()
 
 }
